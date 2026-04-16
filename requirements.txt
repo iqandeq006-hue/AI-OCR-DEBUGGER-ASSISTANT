@@ -1,0 +1,7 @@
+requests
+PyQt6
+sounddevice
+soundfile
+opencv-python
+pytesseract
+numpy
