@@ -1,8 +1,8 @@
 import json
-import subprocess
 import re
 import os
 import logging
+import requests
 
 
 class MiniExplanationEngine:
@@ -52,12 +52,49 @@ class MiniExplanationEngine:
 
         return cleaned if cleaned else text
 
+    def condense_error_text(self, text, max_chars=280):
+        if not text:
+            return None
+
+        priority_patterns = [
+            r"syntaxerror:[^\\n]*",
+            r"nameerror:[^\\n]*",
+            r"typeerror:[^\\n]*",
+            r"valueerror:[^\\n]*",
+            r"indexerror:[^\\n]*",
+            r"keyerror:[^\\n]*",
+            r"attributeerror:[^\\n]*",
+            r"traceback[^\\n]*",
+            r"line\s+\d+[^\\n]*",
+            r'file\s+"[^"]+"[^\\n]*',
+            r"error:[^\\n]*"
+        ]
+
+        pieces = []
+        lowered = text.lower()
+
+        for pattern in priority_patterns:
+            match = re.search(pattern, lowered, re.IGNORECASE)
+            if match:
+                snippet = text[match.start():match.end()].strip()
+                if snippet and snippet not in pieces:
+                    pieces.append(snippet)
+
+        if not pieces:
+            lines = [line.strip() for line in text.splitlines() if line.strip()]
+            pieces = lines[:4]
+
+        condensed = " | ".join(pieces)
+        return condensed[:max_chars].strip() or text[:max_chars].strip()
+
     # -------------------------------
     # PROMPT
     # -------------------------------
     def build_prompt(self, error_text):
         return f"""
-Explain this error simply:
+Explain this coding error in 2 or 3 short sentences.
+Say what is wrong and the likely fix.
+Do not add dialogue, labels, or examples unless necessary.
 
 {error_text}
 """
@@ -67,19 +104,20 @@ Explain this error simply:
     # -------------------------------
     def query_ollama(self, prompt):
         try:
-            process = subprocess.Popen(
-                ["ollama", "run", self.model],
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.DEVNULL
+            response = requests.post(
+                "http://localhost:11434/api/generate",
+                json={
+                    "model": self.model,
+                    "prompt": prompt,
+                    "stream": False,
+                    "options": {
+                        "num_predict": 120,
+                        "temperature": 0.1
+                    }
+                }
             )
-
-            stdout, _ = process.communicate(
-                input=prompt.encode("utf-8")
-            )
-
-            output = stdout.decode("utf-8", errors="ignore").strip()
-
+            response.raise_for_status()
+            output = response.json().get("response", "").strip()
             return output if output else None
 
         except Exception:
@@ -116,7 +154,8 @@ Explain this error simply:
                     "Error text unclear. Try a better screenshot."
                 )
 
-            prompt = self.build_prompt(cleaned)
+            condensed = self.condense_error_text(cleaned)
+            prompt = self.build_prompt(condensed or cleaned)
 
             output = self.query_ollama(prompt)
 

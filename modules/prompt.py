@@ -3,6 +3,7 @@ import json
 import re
 import os
 import logging
+import subprocess
 from datetime import datetime
 
 logging.basicConfig(
@@ -98,6 +99,29 @@ class PromptBuilder:
             return res.json().get("response", "")
         except Exception as e:
             logging.error(f"LLM call failed: {str(e)}")
+            return self._call_ollama_cli(prompt)
+
+    def _call_ollama_cli(self, prompt):
+        try:
+            process = subprocess.Popen(
+                ["ollama", "run", self.model],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE
+            )
+
+            stdout, stderr = process.communicate(
+                input=prompt.encode("utf-8"),
+                timeout=120
+            )
+
+            if process.returncode != 0:
+                err = stderr.decode("utf-8", errors="ignore").strip()
+                raise RuntimeError(err or f"ollama exited with code {process.returncode}")
+
+            return stdout.decode("utf-8", errors="ignore").strip()
+        except Exception as e:
+            logging.error(f"Ollama CLI fallback failed: {str(e)}")
             raise
 
     # =========================

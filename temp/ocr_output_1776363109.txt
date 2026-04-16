@@ -1,3 +1,0 @@
-File "C:\Users\iqand\Downloads\ladylisa\fix\testcase2.py",line1
-if true
-SyntaxError: expected ':'

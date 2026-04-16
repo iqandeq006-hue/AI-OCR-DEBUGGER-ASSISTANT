@@ -1,0 +1,8 @@
+2026-04-17 00:31:15,553 - ERROR - LLM call failed: 500 Server Error: Internal Server Error for url: http://localhost:11434/api/generate
+2026-04-17 00:31:15,553 - ERROR - Run failed: 500 Server Error: Internal Server Error for url: http://localhost:11434/api/generate
+2026-04-17 00:32:01,099 - INFO - Saved file: temp\fixed_20260417_003201.py
+2026-04-17 00:43:55,860 - ERROR - LLM call failed: 500 Server Error: Internal Server Error for url: http://localhost:11434/api/generate
+2026-04-17 00:43:55,861 - ERROR - Run failed: 500 Server Error: Internal Server Error for url: http://localhost:11434/api/generate
+2026-04-17 00:44:44,121 - ERROR - LLM call failed: 500 Server Error: Internal Server Error for url: http://localhost:11434/api/generate
+2026-04-17 00:44:51,988 - INFO - Saved file: temp\fixed_20260417_004451.py
+2026-04-17 00:46:04,845 - INFO - Saved file: temp\fixed_20260417_004604.py

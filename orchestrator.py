@@ -15,6 +15,8 @@ sys.path.append(str(BASE_DIR / "modules"))
 
 TEMP_DIR = BASE_DIR / "temp"
 MODULES_DIR = BASE_DIR / "modules"
+TTS_STATUS_FILE = TEMP_DIR / "tts_status.txt"
+TEMP_DIR.mkdir(exist_ok=True)
 
 # 🔥 GLOBAL PYTHON (FIXED)
 PYTHON_EXEC = sys.executable
@@ -59,9 +61,26 @@ def wait_for_latest(prefix, extension, start_time, timeout=30):
 def clear_temp():
     for f in TEMP_DIR.glob("*"):
         try:
-            f.unlink()
+            if f.is_file():
+                f.unlink()
         except:
             pass
+
+
+def wait_for_tts_ack(start_time, timeout=30):
+    while time.time() - start_time < timeout:
+        if TTS_STATUS_FILE.exists():
+            try:
+                status = TTS_STATUS_FILE.read_text(encoding="utf-8").strip()
+                if TTS_STATUS_FILE.stat().st_mtime > start_time:
+                    # Only return on COMPLETION statuses, not "received"
+                    if status.startswith("played") or status in ("playback-error", "failed", "loop-error"):
+                        return status
+            except:
+                pass
+        time.sleep(0.2)
+    return None
+
 
 def run_subprocess(script_path, python_path):
     return subprocess.Popen(
@@ -176,11 +195,30 @@ class XTTS:
         self.process = None
 
     def start(self):
+        # Kill any stale TTS daemon from previous runs
+        pid_file = TEMP_DIR / "tts.pid"
+        if pid_file.exists():
+            try:
+                old_pid = int(pid_file.read_text().strip())
+                import signal
+                os.kill(old_pid, signal.SIGTERM)
+                log(f"Killed stale TTS daemon PID {old_pid}")
+            except (ProcessLookupError, ValueError, OSError):
+                pass
         self.process = run_subprocess(MODULES_DIR / "tts.py", PYTHON_EXEC)
 
     def speak(self, text):
-        with open(TEMP_DIR / "tts_input.txt", "w") as f:
+        try:
+            if TTS_STATUS_FILE.exists():
+                TTS_STATUS_FILE.unlink()
+        except:
+            pass
+
+        with open(TEMP_DIR / "tts_input.txt", "w", encoding="utf-8") as f:
             f.write(text)
+
+    def wait_for_ack(self, timeout=10):
+        return wait_for_tts_ack(time.time(), timeout=timeout)
 
     def shutdown(self):
         if self.process:
@@ -194,6 +232,52 @@ class Orchestrator:
     def __init__(self):
         self.tts = XTTS()
 
+    async def announce(self, text, wait_for_tts=True):
+        send("text", text)
+        self.tts.speak(text)
+
+        if wait_for_tts:
+            ack = self.tts.wait_for_ack(timeout=10)
+            log(f"TTS announced text, ack={ack}")
+
+    async def acknowledge_choice(self):
+        self.tts.speak("Copy that.")
+        ack = self.tts.wait_for_ack(timeout=10)
+        log(f"TTS acknowledged choice, ack={ack}")
+        time.sleep(1)
+
+    async def prompt_with_buttons(self, text, buttons):
+        await self.announce(text)
+        send("buttons", buttons)
+
+        event = receive()
+        if not event or "data" not in event:
+            return None
+
+        await self.acknowledge_choice()
+        return event
+
+    async def buttons_only(self, buttons):
+        send("buttons", buttons)
+
+        event = receive()
+        if not event or "data" not in event:
+            return None
+
+        await self.acknowledge_choice()
+        return event
+
+    async def prompt_with_files(self, text, files):
+        await self.announce(text)
+        send("files", files)
+
+        event = receive()
+        if not event or "data" not in event:
+            return None
+
+        await self.acknowledge_choice()
+        return event
+
     async def run(self):
         clear_temp()
         self.tts.start()
@@ -202,121 +286,132 @@ class Orchestrator:
         listener.start()
 
         while True:
-
-            listener.wait_for_trigger()
-
-            capture_start = time.time()
-
             try:
-                wait_for_latest("capture", "png", capture_start)
-            except TimeoutError:
-                log("Capture cancelled")
-                send("text", "Capture cancelled. Press shortcut again.")
-                continue
+                listener.wait_for_trigger()
 
-            # OCR (FIXED EXEC)
-            ocr_start = time.time()
-            run_subprocess(MODULES_DIR / "tessa.py", PYTHON_EXEC)
-            ocr_file = wait_for_latest("ocr", "txt", ocr_start)
+                capture_start = time.time()
 
-            # Folder selection
-            send("text", "Select your project folder")
-            send("buttons", ["Select Folder"])
-
-            event = receive()
-            if not event or "data" not in event:
-                send("text", "No input received. Try again.")
-                continue
-
-            project_path = event.get("data")
-
-            engine = ContextEngine()
-            engine.set_project(project_path)
-
-            files = engine.list_files()
-
-            if len(files) > 1:
-                send("text", "Which file caused the error?")
-                send("files", files)
-
-                event = receive()
-                if not event or "data" not in event:
-                    send("text", "File selection failed.")
+                try:
+                    wait_for_latest("capture", "png", capture_start)
+                except TimeoutError:
+                    log("Capture cancelled")
+                    await self.announce("Capture cancelled. Press shortcut again.")
                     continue
 
-                selected_file = event.get("data")
-            else:
-                selected_file = files[0]
+                # OCR (FIXED EXEC)
+                await self.announce("Processing capture and running OCR.")
+                ocr_start = time.time()
+                run_subprocess(MODULES_DIR / "tessa.py", PYTHON_EXEC)
 
-            # Explanation
-            mini = MiniExplanationEngine()
-
-            with open(ocr_file, "r", encoding="utf-8") as f:
-                ocr_text = f.read()
-
-            temp_json = TEMP_DIR / "mini_input.json"
-
-            with open(temp_json, "w") as f:
-                json.dump({"error": ocr_text}, f)
-
-            explanation_file = mini.explain_from_json(str(temp_json))
-            text = open(explanation_file).read()
-
-            send("text", text)
-            self.tts.speak(text)
-
-            # Fix
-            send("buttons", ["Fix", "Skip"])
-            event = receive()
-
-            if event and event.get("data") == "Fix":
-                await self.handle_fix(selected_file, engine)
-
-            # Retry loop
-            while True:
-                send("text", "Are you satisfied?")
-                send("buttons", ["Retry", "Satisfied"])
-
-                event = receive()
-                if not event:
+                try:
+                    ocr_file = wait_for_latest("ocr", "txt", ocr_start)
+                except TimeoutError:
+                    await self.announce("OCR did not return any text. Try another screenshot.")
                     continue
 
-                if event.get("data") == "Retry":
-                    await self.handle_retry(selected_file, engine)
+                # Folder selection
+                event = await self.prompt_with_buttons("Select your project folder", ["Select Folder"])
+                if not event or not event.get("data"):
+                    await self.announce("No folder selected. Try again.")
+                    continue
 
-                elif event.get("data") == "Satisfied":
-                    send("text", "Waiting for next trigger...")
-                    break
+                project_path = event.get("data")
 
-    async def handle_fix(self, selected_file, engine):
+                try:
+                    engine = ContextEngine()
+                    engine.set_project(project_path)
+                except Exception as e:
+                    await self.announce(f"Invalid project folder: {e}")
+                    continue
+
+                files = engine.list_files()
+
+                if not files:
+                    await self.announce("No supported code files found. Select a folder with .py, .c, or .cpp files.")
+                    continue
+
+                if len(files) > 1:
+                    event = await self.prompt_with_files("Which file caused the error?", files)
+                    if not event:
+                        await self.announce("File selection failed.")
+                        continue
+
+                    selected_file = event.get("data")
+                    if selected_file not in files:
+                        await self.announce("Selected file is not in the project list.")
+                        continue
+                else:
+                    selected_file = files[0]
+
+                # Explanation
+                await self.announce("Generating explanation.")
+                mini = MiniExplanationEngine()
+
+                with open(ocr_file, "r", encoding="utf-8") as f:
+                    ocr_text = f.read()
+
+                temp_json = TEMP_DIR / "mini_input.json"
+
+                with open(temp_json, "w", encoding="utf-8") as f:
+                    json.dump({"error": ocr_text}, f)
+
+                explanation_file = mini.explain_from_json(str(temp_json))
+
+                with open(explanation_file, "r", encoding="utf-8") as f:
+                    text = f.read()
+
+                await self.announce(text)
+
+                # Fix
+                event = await self.buttons_only(["Fix", "Skip"])
+
+                if event and event.get("data") == "Fix":
+                    await self.handle_fix(selected_file, engine, ocr_text)
+                elif not event:
+                    await self.announce("No selection received. Returning to standby.")
+                    continue
+
+                # Retry loop
+                while True:
+                    event = await self.prompt_with_buttons("Are you satisfied?", ["Retry", "Satisfied"])
+                    if not event:
+                        await self.announce("No selection received. Returning to standby.")
+                        break
+
+                    if event.get("data") == "Retry":
+                        await self.handle_fix(selected_file, engine, ocr_text, retry=True)
+
+                    elif event.get("data") == "Satisfied":
+                        await self.announce("Waiting for next trigger...")
+                        break
+
+            except Exception as e:
+                log(f"Pipeline error: {e}")
+                await self.announce(f"Pipeline error: {e}")
+
+    async def handle_fix(self, selected_file, engine, error_text, retry=False):
+        label = "Retrying fix." if retry else "Generating fix."
+        await self.announce(label)
+
         pb = PromptBuilder()
         code = engine.file_ops.get_file_content(selected_file)
+        language = engine.context.detect_language(selected_file)
 
         result = pb.run({
             "type": "code",
             "file": selected_file,
-            "language": "python",
-            "error_clean": "",
+            "language": language,
+            "error_clean": error_text,
             "context": {"full_file": code}
-        })
+        }, retry=retry)
 
-        engine.apply_fix(result["file"], selected_file)
+        if result.get("status") != "success" or not result.get("file"):
+            fail_label = "Retry" if retry else "Fix generation"
+            await self.announce(f"{fail_label} failed: {result.get('message', 'Unknown error')}")
+            return
 
-    async def handle_retry(self, selected_file, engine):
-        pb = PromptBuilder()
-        code = engine.file_ops.get_file_content(selected_file)
-
-        result = pb.run({
-            "type": "code",
-            "file": selected_file,
-            "language": "python",
-            "error_clean": "",
-            "context": {"full_file": code}
-        }, retry=True)
-
-        engine.apply_fix(result["file"], selected_file)
-
-        send("text", f"New file created: {Path(result['file']).name}")
+        applied = engine.apply_fix(result["file"], selected_file)
+        await self.announce(f"New file created: {applied['file']}")
 
 # -----------------------------
 # ENTRY

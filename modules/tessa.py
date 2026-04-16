@@ -4,6 +4,7 @@ import os
 import time
 import numpy as np
 import re
+from pytesseract import TesseractError
 
 # -----------------------------
 # CONFIG
@@ -108,7 +109,8 @@ def clean_text(raw_text):
 
         clean_lines.append(line)
 
-    return "\n".join(clean_lines)
+    cleaned = "\n".join(clean_lines).strip()
+    return cleaned or raw_text.strip()
 
 
 # -----------------------------
@@ -149,7 +151,6 @@ def merge_broken_paths(text):
 
 
 def clean_path(path):
-    path = path.replace(" ", "")
     path = path.replace("Loc:", "Local")
     path = path.replace("Appbata", "AppData")
     path = path.replace("Prograns", "Programs")
@@ -218,7 +219,14 @@ def extract_text_from_screenshot():
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
     # Pre-check (light OCR)
-    pre_text = pytesseract.image_to_string(gray, config="--psm 6")
+    try:
+        pre_text = pytesseract.image_to_string(gray, config="--psm 6")
+    except TesseractError as e:
+        print(f"[OCR] Pre-check OCR failed: {e}")
+        pre_text = ""
+    except Exception as e:
+        print(f"[OCR] Pre-check OCR crashed: {e}")
+        pre_text = ""
 
     if not is_terminal_screen(gray, pre_text):
         print("[OCR] Not a terminal screen, continuing anyway...")
@@ -226,10 +234,17 @@ def extract_text_from_screenshot():
     # Main OCR
     processed = preprocess(img)
 
-    raw_text = pytesseract.image_to_string(
-        processed,
-        config="--oem 3 --psm 6"
-    )
+    try:
+        raw_text = pytesseract.image_to_string(
+            processed,
+            config="--oem 3 --psm 6"
+        )
+    except TesseractError as e:
+        print(f"[OCR] Main OCR failed: {e}")
+        return
+    except Exception as e:
+        print(f"[OCR] Main OCR crashed: {e}")
+        return
 
     clean = clean_text(raw_text)
 
