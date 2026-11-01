@@ -19,6 +19,15 @@
 > Held on **April 25–26, 2026** at **Ahalia School of Engineering & Technology, Palakkad**  
 > **Team Lead:** **Dharshin R**
 
+<p align="center">
+  <a href="#-abstract--research-overview"><b>Abstract</b></a> •
+  <a href="#-system-architecture"><b>Architecture</b></a> •
+  <a href="#-empirical-benchmarks--experimental-results"><b>Benchmarks</b></a> •
+  <a href="#-research-team--author-contributions"><b>Research Team</b></a> •
+  <a href="#-installation--quickstart"><b>Quick Start</b></a> •
+  <a href="#-best-paper-award--publication"><b>Publication</b></a>
+</p>
+
 ---
 
 ## 📌 Abstract & Research Overview
