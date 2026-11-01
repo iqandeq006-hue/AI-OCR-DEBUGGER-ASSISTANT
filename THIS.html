@@ -1,0 +1,854 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+<meta charset="UTF-8" />
+<title>AI Debugging Assistant — symbol UI concept v2</title>
+<style>
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0; height: 100%;
+    background: #e9e9ec;
+    font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  .stage { display: flex; flex-direction: column; align-items: center; gap: 18px; }
+
+  .monitor {
+    width: 940px; height: 580px; background: #1c1c1e;
+    border-radius: 22px; padding: 14px;
+    box-shadow: 0 30px 60px rgba(0,0,0,0.25);
+    /* wallpaper behind the UI never changes with theme — only the chrome does.
+       Vivid red swirl on purpose: strong color behind the bar is the best way
+       to prove the glass is actually refracting/blurring what's behind it. */
+    --bg1: radial-gradient(circle at 22% 18%, #ff8a65, transparent 55%);
+    --bg2: radial-gradient(circle at 80% 70%, #b3001b, transparent 60%);
+    --bg3: linear-gradient(155deg, #e8262f 0%, #8f0d1f 55%, #3a0510 100%);
+    /* ---- dark chrome tokens (default) — real frosted glass: light, translucent, high blur ---- */
+    --glass: rgba(255,255,255,0.10);
+    --glass-strong: rgba(255,255,255,0.16);
+    --glass-border-hi: rgba(255,255,255,0.65);
+    --glass-border-lo: rgba(0,0,0,0.22);
+    --text: rgba(255,255,255,0.92);
+    --text-dim: rgba(255,255,255,0.55);
+    --text-faint: rgba(255,255,255,0.38);
+    --icon: rgba(255,255,255,0.92);
+    --hover: rgba(255,255,255,0.12);
+    --divider: rgba(255,255,255,0.14);
+    --scrim: rgba(8,8,10,0.55);
+    --card: #141416;
+    --card-alt: rgba(255,255,255,0.06);
+    --accent: #4a9eff;
+    --accent-soft: rgba(74,158,255,0.25);
+    --danger: #ff6b6b;
+    --good: #4acf7c;
+    transition: background 0.3s ease;
+  }
+
+  /* Light chrome: mid/dark glass, NOT bright white — the wallpaper (--bg1/2/3) stays untouched */
+  .monitor[data-theme="light"] {
+    --glass: rgba(210,214,222,0.42);
+    --glass-strong: rgba(228,231,237,0.72);
+    --glass-border-hi: rgba(255,255,255,0.55);
+    --glass-border-lo: rgba(0,0,0,0.16);
+    --text: rgba(24,26,32,0.92);
+    --text-dim: rgba(24,26,32,0.6);
+    --text-faint: rgba(24,26,32,0.42);
+    --icon: rgba(24,26,32,0.85);
+    --hover: rgba(24,26,32,0.1);
+    --divider: rgba(24,26,32,0.14);
+    --scrim: rgba(10,10,14,0.5);
+    --card: #f3f4f7;
+    --card-alt: rgba(24,26,32,0.05);
+    --accent: #2f7dea;
+    --accent-soft: rgba(47,125,234,0.22);
+    --danger: #e0524f;
+    --good: #2ea867;
+  }
+
+  .screen {
+    position: relative; width: 912px; height: 552px;
+    border-radius: 10px; overflow: hidden;
+    background: var(--bg1), var(--bg2), var(--bg3);
+  }
+
+  .hover-zone { position: absolute; z-index: 5; display: none; }
+  .hover-zone.top { top: 0; left: 0; right: 0; height: 54px; }
+  .hover-zone.right { top: 0; right: 0; bottom: 0; width: 54px; }
+
+  .hairline {
+    position: absolute; background: var(--glass-border-hi); border-radius: 3px;
+    transition: opacity 0.25s ease; pointer-events: none;
+  }
+  .hairline.top { top: 8px; left: 50%; transform: translateX(-50%); width: 64px; height: 3px; }
+  .hairline.right { top: 50%; right: 8px; transform: translateY(-50%); width: 3px; height: 64px; }
+
+  .bar-wrap {
+    position: absolute; z-index: 6; padding: 2px; border-radius: 24px;
+    background: conic-gradient(from 0deg,
+      rgba(255,255,255,0.05), rgba(255,255,255,0.5),
+      rgba(255,255,255,0.05), rgba(255,255,255,0.32), rgba(255,255,255,0.05));
+    animation: rotateBorder 6s linear infinite;
+    opacity: 0; transition: opacity 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .bar-wrap.expanded { opacity: 1; }
+  .bar-wrap.top { top: 14px; left: 50%; transform: translateX(-50%); }
+  .bar-wrap.right { top: 50%; right: 14px; transform: translateY(-50%); }
+  @keyframes rotateBorder { to { filter: hue-rotate(360deg); } }
+
+  .bar {
+    position: relative; background: var(--glass);
+    backdrop-filter: blur(22px) saturate(180%); -webkit-backdrop-filter: blur(22px) saturate(180%);
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: inset 0 1px 0 var(--glass-border-hi), inset 0 -1px 0 var(--glass-border-lo), 0 10px 26px rgba(0,0,0,0.35);
+  }
+  .bar-wrap.top .bar { flex-direction: row; gap: 6px; padding: 8px 10px; border-radius: 22px; }
+  .bar-wrap.right .bar { flex-direction: column; gap: 6px; padding: 10px 8px; border-radius: 22px; }
+
+  .icon-btn {
+    position: relative; width: 32px; height: 32px; border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; transition: background 0.15s ease, transform 0.09s ease-out;
+  }
+  .icon-btn:hover { background: var(--hover); }
+  .icon-btn:active { transform: scale(0.9); }
+  .icon-btn.primary { background: var(--accent-soft); }
+  .icon-btn.on, .icon-btn.active { background: var(--accent-soft); }
+
+  .icon-btn svg {
+    width: 18px; height: 18px; stroke: var(--icon);
+    fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round;
+    transition: opacity 0.15s ease;
+  }
+  .icon-btn .svg-alt { display: none; }
+  .icon-btn.on .svg-main { display: none; }
+  .icon-btn.on .svg-alt { display: block; }
+
+  .icon-btn.processing svg { opacity: 0; }
+  .icon-spinner { position: absolute; width: 15px; height: 15px; opacity: 0; transition: opacity 0.15s ease; }
+  .icon-btn.processing .icon-spinner { opacity: 1; }
+  .icon-spinner i {
+    position: absolute; top: 0; left: 50%; width: 1.4px; height: 4px; margin-left: -0.7px;
+    border-radius: 1px; background: var(--icon);
+    transform-origin: 0.7px 7.5px; animation: tick 1s linear infinite;
+  }
+  @keyframes tick { 0%, 100% { opacity: 0.15; } 50% { opacity: 0.9; } }
+  .icon-spinner i:nth-child(1) { transform: rotate(0deg); animation-delay: -0.83s; }
+  .icon-spinner i:nth-child(2) { transform: rotate(45deg); animation-delay: -0.62s; }
+  .icon-spinner i:nth-child(3) { transform: rotate(90deg); animation-delay: -0.41s; }
+  .icon-spinner i:nth-child(4) { transform: rotate(135deg); animation-delay: -0.20s; }
+  .icon-spinner i:nth-child(5) { transform: rotate(180deg); animation-delay: 0s; }
+  .icon-spinner i:nth-child(6) { transform: rotate(225deg); animation-delay: -0.95s; }
+  .icon-spinner i:nth-child(7) { transform: rotate(270deg); animation-delay: -0.74s; }
+  .icon-spinner i:nth-child(8) { transform: rotate(315deg); animation-delay: -0.53s; }
+
+  .divider-h { width: 1px; height: 20px; background: var(--divider); }
+  .divider-v { height: 1px; width: 20px; background: var(--divider); }
+
+  .icon-btn::after {
+    content: attr(data-label); position: absolute; white-space: nowrap;
+    font-size: 10px; font-weight: 600; color: var(--text);
+    background: var(--glass-strong); padding: 3px 7px; border-radius: 7px;
+    opacity: 0; pointer-events: none; transition: opacity 0.15s ease; backdrop-filter: blur(10px);
+  }
+  .bar-wrap.top .icon-btn::after { top: 40px; left: 50%; transform: translateX(-50%); }
+  .bar-wrap.right .icon-btn::after { right: 40px; top: 50%; transform: translateY(-50%); }
+  .icon-btn:hover::after { opacity: 1; }
+
+  /* ---------------- explanation notification-stack ---------------- */
+  .notify-stack {
+    position: absolute; top: 20px; right: 20px; z-index: 8; width: 300px;
+    display: flex; flex-direction: column; gap: 8px;
+    opacity: 0; pointer-events: none; transform: translateY(-6px);
+    transition: opacity 0.4s cubic-bezier(0.22,1,0.36,1), transform 0.4s cubic-bezier(0.22,1,0.36,1);
+  }
+  .notify-stack.visible { opacity: 1; pointer-events: auto; transform: translateY(0); }
+  .notify-eyebrow { font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-faint); padding: 0 4px; }
+  .notify-card {
+    display: flex; gap: 10px; padding: 12px 14px; border-radius: 16px; background: var(--glass-strong);
+    backdrop-filter: blur(22px) saturate(180%); -webkit-backdrop-filter: blur(22px) saturate(180%);
+    box-shadow: inset 0 1px 0 var(--glass-border-hi), 0 14px 30px rgba(0,0,0,0.3);
+    animation: cardIn 0.35s cubic-bezier(0.22,1,0.36,1);
+  }
+  @keyframes cardIn { from { opacity: 0; transform: translateY(-8px) scale(0.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
+  .notify-icon { flex: none; width: 30px; height: 30px; border-radius: 9px; display: flex; align-items: center; justify-content: center; background: var(--accent-soft); }
+  .notify-icon svg { width: 16px; height: 16px; stroke: var(--accent); fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  .notify-body { flex: 1; min-width: 0; }
+  .notify-title { font-size: 12.5px; font-weight: 700; color: var(--text); margin-bottom: 2px; }
+  .notify-text { font-size: 12px; line-height: 1.5; color: var(--text-dim); }
+  .notify-actions { display: flex; gap: 6px; margin-top: 9px; opacity: 0; transform: scale(0.85);
+    transition: opacity 0.16s ease, transform 0.16s cubic-bezier(0.34,1.56,0.64,1); }
+  .notify-actions.show { opacity: 1; transform: scale(1); }
+  .notify-actions button { flex: 1; padding: 7px 0; border-radius: 9px; border: 1px solid var(--divider);
+    background: var(--card-alt); color: var(--text); font-size: 11.5px; font-weight: 600; font-family: inherit; cursor: pointer; }
+  .notify-actions button.primary { background: var(--accent); color: #fff; border: none; }
+  .notify-actions button:hover { filter: brightness(1.1); }
+
+  /* ---------------- overlays ---------------- */
+  .overlay {
+    position: absolute; inset: 0; z-index: 20; background: var(--scrim); backdrop-filter: blur(6px);
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0; pointer-events: none; transition: opacity 0.25s ease;
+  }
+  .overlay.visible { opacity: 1; pointer-events: auto; }
+
+  .modal {
+    width: 340px; max-height: 460px; border-radius: 22px; padding: 16px;
+    background: var(--glass-strong);
+    backdrop-filter: blur(26px) saturate(180%); -webkit-backdrop-filter: blur(26px) saturate(180%);
+    box-shadow: inset 0 1px 0 var(--glass-border-hi), 0 24px 50px rgba(0,0,0,0.4);
+    display: flex; flex-direction: column; gap: 8px;
+    transform: translateY(10px) scale(0.97); opacity: 0;
+    transition: transform 0.3s cubic-bezier(0.22,1,0.36,1), opacity 0.3s ease;
+  }
+  .overlay.visible .modal { transform: translateY(0) scale(1); opacity: 1; }
+
+  .modal-head { display: flex; align-items: center; justify-content: space-between; padding: 0 2px 4px; flex: none; }
+  .modal-title { font-size: 14px; font-weight: 700; color: var(--text); }
+  .modal-close { width: 24px; height: 24px; border-radius: 8px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--text-dim); }
+  .modal-close:hover { background: var(--hover); }
+  .modal-close svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; }
+
+  .settings-scroll { overflow-y: auto; display: flex; flex-direction: column; gap: 4px; padding-right: 2px; }
+  .settings-scroll::-webkit-scrollbar { width: 5px; }
+  .settings-scroll::-webkit-scrollbar-thumb { background: var(--divider); border-radius: 4px; }
+
+  .section-label { font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--text-faint); padding: 10px 2px 2px; }
+  .section-label:first-child { padding-top: 2px; }
+
+  .history-list { display: flex; flex-direction: column; gap: 6px; overflow-y: auto; max-height: 320px; padding: 2px; }
+  .history-item { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 16px;
+    background: var(--card-alt); cursor: pointer; transition: background 0.15s ease, transform 0.15s ease; }
+  .history-item:hover { background: var(--accent-soft); transform: translateX(2px); }
+  .history-item.selected { background: var(--card); box-shadow: 0 10px 20px rgba(0,0,0,0.15); }
+  .history-badge { flex: none; width: 30px; height: 30px; border-radius: 9px; display: flex; align-items: center; justify-content: center; }
+  .history-badge svg { width: 16px; height: 16px; stroke: #fff; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  .history-label { font-size: 13px; font-weight: 600; color: var(--text); }
+  .history-time { font-size: 11px; color: var(--text-faint); margin-top: 1px; }
+
+  .folder-list { display: flex; flex-direction: column; gap: 6px; }
+  .folder-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px;
+    background: var(--card-alt); cursor: pointer; font-size: 12.5px; color: var(--text); }
+  .folder-item:hover { background: var(--accent-soft); }
+  .folder-item.chosen { background: var(--accent); color: #fff; }
+  .folder-item svg { width: 15px; height: 15px; stroke: currentColor; fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+  .modal-primary-btn { margin-top: 4px; padding: 10px 0; border-radius: 12px; border: none;
+    background: var(--accent); color: #fff; font-size: 13px; font-weight: 700; font-family: inherit; cursor: pointer; flex: none; }
+  .modal-note { font-size: 11.5px; color: var(--text-faint); line-height: 1.4; flex: none; }
+
+  .settings-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 2px; gap: 10px; }
+  .settings-label { font-size: 12.5px; font-weight: 600; color: var(--text); }
+  .settings-sub { font-size: 11px; color: var(--text-faint); margin-top: 2px; }
+
+  .segmented { display: flex; background: var(--card-alt); border-radius: 999px; padding: 3px; gap: 2px; flex: none; }
+  .segmented button { border: none; background: transparent; padding: 6px 12px; border-radius: 999px;
+    font-size: 11.5px; font-weight: 700; font-family: inherit; color: var(--text-dim); cursor: pointer;
+    display: flex; align-items: center; gap: 5px; }
+  .segmented button svg { width: 13px; height: 13px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  .segmented button.active { background: var(--card); color: var(--text); box-shadow: 0 3px 8px rgba(0,0,0,0.15); }
+
+  .switch { width: 38px; height: 22px; border-radius: 999px; background: var(--card-alt); position: relative; cursor: pointer; flex: none; }
+  .switch .knob { position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: #fff;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.3); transition: transform 0.2s cubic-bezier(0.34,1.56,0.64,1); }
+  .switch.on { background: var(--accent); }
+  .switch.on .knob { transform: translateX(16px); }
+
+  input[type=range].slider { width: 100%; accent-color: var(--accent); }
+
+  .shortcut-chip { padding: 6px 12px; border-radius: 9px; background: var(--card-alt); font-size: 11.5px;
+    font-weight: 700; color: var(--text); letter-spacing: 0.02em; font-family: ui-monospace, monospace; }
+  .shortcut-chip.recording { color: var(--accent); animation: pulse 1s ease infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+  .change-btn { padding: 6px 10px; border-radius: 9px; border: 1px solid var(--divider); background: transparent;
+    color: var(--text-dim); font-size: 11px; font-weight: 600; font-family: inherit; cursor: pointer; }
+  .change-btn:hover { background: var(--hover); }
+
+  /* models list */
+  .model-card { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 14px;
+    background: var(--card-alt); cursor: pointer; border: 1.5px solid transparent; }
+  .model-card.active { border-color: var(--accent); background: var(--accent-soft); }
+  .model-card.locked { cursor: default; }
+  .model-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--divider); }
+  .model-card.active .model-dot { background: var(--accent); }
+  .model-info { flex: 1; min-width: 0; }
+  .model-name { font-size: 12.5px; font-weight: 700; color: var(--text); }
+  .model-tag { font-size: 10.5px; color: var(--text-faint); margin-top: 1px; }
+  .model-action { flex: none; }
+  .dl-btn { padding: 6px 10px; border-radius: 9px; border: none; background: var(--card);
+    color: var(--text); font-size: 10.5px; font-weight: 700; font-family: inherit; cursor: pointer; }
+  .dl-btn:hover { filter: brightness(1.15); }
+  .dl-progress { width: 70px; height: 5px; border-radius: 3px; background: var(--divider); overflow: hidden; }
+  .dl-progress-fill { height: 100%; width: 0%; background: var(--accent); transition: width 0.12s linear; }
+  .badge-active { font-size: 9.5px; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 0.05em; }
+  .badge-ready { font-size: 9.5px; font-weight: 700; color: var(--good); text-transform: uppercase; letter-spacing: 0.05em; }
+
+  .dim { position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity 0.18s ease; z-index: 15; }
+  .dim.active { opacity: 1; pointer-events: auto; }
+  .selection-rect { position: absolute; border: 2px solid #000; box-shadow: 0 0 0 9999px rgba(0,0,0,0.55); display: none; }
+  .hint { position: absolute; bottom: 26px; left: 50%; transform: translateX(-50%); color: rgba(255,255,255,0.85);
+    font-size: 12px; font-weight: 500; opacity: 0; transition: opacity 0.2s ease; pointer-events: none; }
+  .dim.active .hint { opacity: 1; }
+
+  .controls { display: flex; gap: 10px; align-items: center; }
+  .controls button { padding: 9px 18px; border-radius: 980px; border: none; background: #1c1c1e; color: #fff;
+    font-size: 13px; font-weight: 600; font-family: inherit; cursor: pointer; }
+  .controls span { font-size: 12px; color: #6b6b70; }
+  .note { font-size: 12px; color: #9a9a9f; max-width: 640px; text-align: center; }
+</style>
+</head>
+
+<body>
+
+<div class="stage">
+  <div class="monitor" id="monitor">
+    <div class="screen" id="screen">
+
+      <div class="hover-zone top" id="zoneTop"></div>
+      <div class="hover-zone right" id="zoneRight"></div>
+
+      <!-- TOP BAR -->
+      <div class="bar-wrap top" id="barWrapTop">
+        <div class="bar">
+          <div class="icon-btn primary" id="captureTop" data-label="Screenshot">
+            <svg viewBox="0 0 24 24"><path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8"/><path d="M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8"/><path d="M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16"/><path d="M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16"/><circle cx="12" cy="12" r="3"/></svg>
+            <div class="icon-spinner"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+          </div>
+          <div class="divider-h"></div>
+          <div class="icon-btn" id="folderTop" data-label="Folder access">
+            <svg viewBox="0 0 24 24"><path d="M3 9.5V7a2 2 0 0 1 2-2h3.5l1.5 2H19a2 2 0 0 1 2 2v1"/><path d="M3 9.5h18l-1.6 8a2 2 0 0 1-2 1.7H6.6a2 2 0 0 1-2-1.7L3 9.5Z"/></svg>
+          </div>
+          <div class="icon-btn" id="audioTop" data-label="Voice">
+            <svg class="svg-main" viewBox="0 0 24 24"><path d="M4.5 9.5v5h3.2L12 18V6L7.7 9.5H4.5Z"/><path d="M15.5 9a4 4 0 0 1 0 6"/><path d="M18 6.5a7.5 7.5 0 0 1 0 11"/></svg>
+            <svg class="svg-alt" viewBox="0 0 24 24"><path d="M4.5 9.5v5h3.2L12 18V6L7.7 9.5H4.5Z"/><path d="M15 9.5l4.5 5M19.5 9.5 15 14.5"/></svg>
+          </div>
+          <div class="icon-btn" id="historyTop" data-label="History">
+            <svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.5-5.8"/><path d="M4 4v4h4"/><path d="M12 8v4l3 2"/></svg>
+          </div>
+          <div class="icon-btn" id="settingsTop" data-label="Settings">
+            <svg viewBox="0 0 24 24"><path d="M4 7h9M17 7h3"/><circle cx="14" cy="7" r="2"/><path d="M4 12h3M11 12h9"/><circle cx="8" cy="12" r="2"/><path d="M4 17h9M17 17h3"/><circle cx="14" cy="17" r="2"/></svg>
+          </div>
+        </div>
+      </div>
+      <div class="hairline top" id="hairlineTop"></div>
+
+      <!-- RIGHT BAR -->
+      <div class="bar-wrap right" id="barWrapRight" style="display:none;">
+        <div class="bar">
+          <div class="icon-btn primary" id="captureRight" data-label="Screenshot">
+            <svg viewBox="0 0 24 24"><path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8"/><path d="M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8"/><path d="M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16"/><path d="M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16"/><circle cx="12" cy="12" r="3"/></svg>
+            <div class="icon-spinner"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+          </div>
+          <div class="divider-v"></div>
+          <div class="icon-btn" id="folderRight" data-label="Folder access">
+            <svg viewBox="0 0 24 24"><path d="M3 9.5V7a2 2 0 0 1 2-2h3.5l1.5 2H19a2 2 0 0 1 2 2v1"/><path d="M3 9.5h18l-1.6 8a2 2 0 0 1-2 1.7H6.6a2 2 0 0 1-2-1.7L3 9.5Z"/></svg>
+          </div>
+          <div class="icon-btn" id="audioRight" data-label="Voice">
+            <svg class="svg-main" viewBox="0 0 24 24"><path d="M4.5 9.5v5h3.2L12 18V6L7.7 9.5H4.5Z"/><path d="M15.5 9a4 4 0 0 1 0 6"/><path d="M18 6.5a7.5 7.5 0 0 1 0 11"/></svg>
+            <svg class="svg-alt" viewBox="0 0 24 24"><path d="M4.5 9.5v5h3.2L12 18V6L7.7 9.5H4.5Z"/><path d="M15 9.5l4.5 5M19.5 9.5 15 14.5"/></svg>
+          </div>
+          <div class="icon-btn" id="historyRight" data-label="History">
+            <svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.5-5.8"/><path d="M4 4v4h4"/><path d="M12 8v4l3 2"/></svg>
+          </div>
+          <div class="icon-btn" id="settingsRight" data-label="Settings">
+            <svg viewBox="0 0 24 24"><path d="M4 7h9M17 7h3"/><circle cx="14" cy="7" r="2"/><path d="M4 12h3M11 12h9"/><circle cx="8" cy="12" r="2"/><path d="M4 17h9M17 17h3"/><circle cx="14" cy="17" r="2"/></svg>
+          </div>
+        </div>
+      </div>
+      <div class="hairline right" id="hairlineRight" style="display:none;"></div>
+
+      <!-- EXPLANATION notification stack -->
+      <div class="notify-stack" id="notifyStack">
+        <div class="notify-eyebrow">Explanation</div>
+        <div class="notify-card">
+          <div class="notify-icon"><svg viewBox="0 0 24 24"><path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8"/><path d="M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8"/><path d="M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16"/><path d="M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16"/><circle cx="12" cy="12" r="3"/></svg></div>
+          <div class="notify-body">
+            <div class="notify-title">Screen capture</div>
+            <div class="notify-text" id="explanationText"></div>
+            <div class="notify-actions" id="resultButtons">
+              <button class="retryBtn">Retry</button>
+              <button class="primary satisfiedBtn">Satisfied</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- HISTORY overlay -->
+      <div class="overlay" id="historyOverlay">
+        <div class="modal">
+          <div class="modal-head">
+            <div class="modal-title">History</div>
+            <div class="modal-close" id="closeHistory"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></div>
+          </div>
+          <div class="history-list" id="historyList"></div>
+        </div>
+      </div>
+
+      <!-- FOLDER overlay -->
+      <div class="overlay" id="folderOverlay">
+        <div class="modal" style="width:300px;">
+          <div class="modal-head">
+            <div class="modal-title">Grant folder access</div>
+            <div class="modal-close" id="closeFolder"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></div>
+          </div>
+          <div class="modal-note">Choose which folder the AI assistant can read from and watch for context.</div>
+          <div class="folder-list" id="folderList"></div>
+          <button class="modal-primary-btn" id="grantFolderBtn">Grant access</button>
+        </div>
+      </div>
+
+      <!-- SETTINGS overlay -->
+      <div class="overlay" id="settingsOverlay">
+        <div class="modal" style="width:310px; max-height:480px;">
+          <div class="modal-head">
+            <div class="modal-title">Settings</div>
+            <div class="modal-close" id="closeSettings"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></div>
+          </div>
+
+          <div class="settings-scroll">
+
+            <div class="section-label">Appearance</div>
+            <div class="settings-row">
+              <div>
+                <div class="settings-label">Theme</div>
+                <div class="settings-sub">Only the glass changes, not your wallpaper</div>
+              </div>
+              <div class="segmented" id="themeToggle">
+                <button data-mode="dark" class="active"><svg viewBox="0 0 24 24"><path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5Z"/></svg>Dark</button>
+                <button data-mode="light"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg>Light</button>
+              </div>
+            </div>
+
+            <div class="section-label">Voice</div>
+            <div class="settings-row">
+              <div>
+                <div class="settings-label">Voice replies</div>
+                <div class="settings-sub" id="voiceSub">TTS is on</div>
+              </div>
+              <div class="switch on" id="voiceSwitch"><div class="knob"></div></div>
+            </div>
+            <div class="settings-row" style="flex-direction:column; align-items:stretch; gap:4px;">
+              <div class="settings-label">Volume</div>
+              <input type="range" class="slider" id="volumeSlider" min="0" max="100" value="70">
+            </div>
+
+            <div class="section-label">Triggers</div>
+            <div class="settings-row">
+              <div>
+                <div class="settings-label">Reveal edge</div>
+                <div class="settings-sub">Where the bar docks</div>
+              </div>
+              <div class="segmented" id="edgeToggle">
+                <button data-edge="top" class="active"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3"/><rect x="7" y="5.5" width="10" height="3" rx="1.5"/></svg>Top</button>
+                <button data-edge="right"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3"/><rect x="15.5" y="7" width="3" height="10" rx="1.5"/></svg>Right</button>
+              </div>
+            </div>
+            <div class="settings-row">
+              <div>
+                <div class="settings-label">Reveal on</div>
+                <div class="settings-sub">Hover the edge, or click the hairline</div>
+              </div>
+              <div class="segmented" id="revealToggle">
+                <button data-reveal="hover" class="active">Hover</button>
+                <button data-reveal="click">Click</button>
+              </div>
+            </div>
+            <div class="settings-row">
+              <div>
+                <div class="settings-label">Capture shortcut</div>
+                <div class="settings-sub" id="shortcutSub">Opens the bar from anywhere</div>
+              </div>
+              <div style="display:flex; align-items:center; gap:6px;">
+                <div class="shortcut-chip" id="shortcutChip">Ctrl+Shift+L</div>
+                <button class="change-btn" id="changeShortcutBtn">Change</button>
+              </div>
+            </div>
+
+            <div class="section-label">Models</div>
+            <div id="modelList" style="display:flex; flex-direction:column; gap:6px;"></div>
+
+          </div>
+        </div>
+      </div>
+
+      <div class="dim" id="dim">
+        <div class="selection-rect" id="selRect"></div>
+        <div class="hint">Drag to select an area</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <span>Status:</span>
+    <span id="statusLabel">idle</span>
+    <button id="resetBtn">Reset</button>
+  </div>
+  <div class="note">Viewfinder = screenshot · open-folder = folder access · speaker = voice · history arrow = recent actions · sliders = settings (theme, triggers &amp; models live in there). Click the viewfinder, then drag on the screen to try the capture flow.</div>
+</div>
+
+<script>
+  const monitor = document.getElementById('monitor');
+  const screenEl = document.getElementById('screen');
+  const zoneTop = document.getElementById('zoneTop');
+  const zoneRight = document.getElementById('zoneRight');
+  const hairlineTop = document.getElementById('hairlineTop');
+  const hairlineRight = document.getElementById('hairlineRight');
+  const barWrapTop = document.getElementById('barWrapTop');
+  const barWrapRight = document.getElementById('barWrapRight');
+  const dim = document.getElementById('dim');
+  const selRect = document.getElementById('selRect');
+  const resetBtn = document.getElementById('resetBtn');
+  const statusLabel = document.getElementById('statusLabel');
+  const notifyStack = document.getElementById('notifyStack');
+  const explanationText = document.getElementById('explanationText');
+  const resultButtons = document.getElementById('resultButtons');
+
+  const FULL_TEXT = "SyntaxError on line 42 \u2014 a missing colon after the function definition. Applying the fix now and checking for any related issues nearby.";
+
+  function setStatus(t) { statusLabel.textContent = t; }
+
+  /* ---------- edge switching (top / right) ---------- */
+  let activeEdge = 'top';
+  let revealMode = 'hover';
+  let hoverTimer = null;
+
+  function applyEdge(edge) {
+    activeEdge = edge;
+    zoneTop.style.display = activeEdge === 'top' ? 'block' : 'none';
+    zoneRight.style.display = activeEdge === 'right' ? 'block' : 'none';
+    barWrapTop.style.display = activeEdge === 'top' ? 'flex' : 'none';
+    barWrapRight.style.display = activeEdge === 'right' ? 'flex' : 'none';
+    hairlineTop.style.display = activeEdge === 'top' ? 'block' : 'none';
+    hairlineRight.style.display = activeEdge === 'right' ? 'block' : 'none';
+    collapseAll();
+  }
+  applyEdge('top');
+
+  function expand(edge) {
+    const wrap = edge === 'top' ? barWrapTop : barWrapRight;
+    const line = edge === 'top' ? hairlineTop : hairlineRight;
+    wrap.classList.add('expanded');
+    line.style.opacity = '0';
+  }
+  function collapse(edge) {
+    const wrap = edge === 'top' ? barWrapTop : barWrapRight;
+    const line = edge === 'top' ? hairlineTop : hairlineRight;
+    wrap.classList.remove('expanded');
+    line.style.opacity = '1';
+  }
+  function collapseAll() { collapse('top'); collapse('right'); }
+
+  [ [zoneTop, barWrapTop, 'top'], [zoneRight, barWrapRight, 'right'] ].forEach(([zone, wrap, edge]) => {
+    zone.addEventListener('mouseenter', () => { if (revealMode === 'hover') { clearTimeout(hoverTimer); expand(edge); } });
+    zone.addEventListener('mouseleave', () => { if (revealMode === 'hover') hoverTimer = setTimeout(() => collapse(edge), 220); });
+    zone.addEventListener('click', () => { if (revealMode === 'click') { wrap.classList.contains('expanded') ? collapse(edge) : expand(edge); } });
+    wrap.addEventListener('mouseenter', () => { if (revealMode === 'hover') clearTimeout(hoverTimer); });
+    wrap.addEventListener('mouseleave', () => { if (revealMode === 'hover') hoverTimer = setTimeout(() => collapse(edge), 220); });
+  });
+
+  /* ---------- screenshot / capture / explanation flow ---------- */
+  function wireCapture(btnId, edge) {
+    const btn = document.getElementById(btnId);
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      screenEl.classList.add('selecting');
+      dim.classList.add('active');
+      setStatus('selecting \u2014 drag on the screen');
+      dim.dataset.edge = edge;
+    });
+  }
+  wireCapture('captureTop', 'top');
+  wireCapture('captureRight', 'right');
+
+  let selecting = false, selStart = { x: 0, y: 0 };
+
+  screenEl.addEventListener('mousedown', (e) => {
+    if (!dim.classList.contains('active')) return;
+    selecting = true;
+    const rect = screenEl.getBoundingClientRect();
+    selStart = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    selRect.style.display = 'block';
+    selRect.style.left = selStart.x + 'px';
+    selRect.style.top = selStart.y + 'px';
+    selRect.style.width = '0px';
+    selRect.style.height = '0px';
+  });
+
+  window.addEventListener('mousemove', (e) => {
+    if (!selecting) return;
+    const rect = screenEl.getBoundingClientRect();
+    const curX = e.clientX - rect.left, curY = e.clientY - rect.top;
+    const x = Math.min(curX, selStart.x), y = Math.min(curY, selStart.y);
+    const w = Math.abs(curX - selStart.x), h = Math.abs(curY - selStart.y);
+    selRect.style.left = x + 'px'; selRect.style.top = y + 'px';
+    selRect.style.width = w + 'px'; selRect.style.height = h + 'px';
+  });
+
+  window.addEventListener('mouseup', () => {
+    if (!selecting) return;
+    selecting = false;
+    screenEl.classList.remove('selecting');
+    dim.classList.remove('active');
+    selRect.style.display = 'none';
+    setStatus('captured');
+
+    const edge = dim.dataset.edge || 'top';
+    const captureBtn = document.getElementById(edge === 'top' ? 'captureTop' : 'captureRight');
+
+    setTimeout(() => { captureBtn.classList.add('processing'); setStatus('processing'); }, 200);
+
+    setTimeout(() => {
+      captureBtn.classList.remove('processing');
+      notifyStack.classList.add('visible');
+      streamText();
+      setStatus('result');
+    }, 1500);
+  });
+
+  function streamText() {
+    explanationText.textContent = '';
+    resultButtons.classList.remove('show');
+    const words = FULL_TEXT.split(' ');
+    let i = 0;
+    const interval = setInterval(() => {
+      explanationText.textContent += (i === 0 ? '' : ' ') + words[i];
+      i++;
+      if (i >= words.length) { clearInterval(interval); setTimeout(() => resultButtons.classList.add('show'), 100); }
+    }, 90);
+  }
+
+  document.querySelector('.satisfiedBtn').addEventListener('click', reset);
+  document.querySelector('.retryBtn').addEventListener('click', () => {
+    notifyStack.classList.remove('visible');
+    setStatus('retrying');
+    setTimeout(() => { notifyStack.classList.add('visible'); streamText(); setStatus('result'); }, 700);
+  });
+
+  function reset() {
+    dim.classList.remove('active');
+    screenEl.classList.remove('selecting');
+    selRect.style.display = 'none';
+    notifyStack.classList.remove('visible');
+    resultButtons.classList.remove('show');
+    setStatus('idle');
+  }
+  resetBtn.addEventListener('click', reset);
+
+  /* ---------- audio toggle ---------- */
+  ['audioTop', 'audioRight'].forEach(id => {
+    document.getElementById(id).addEventListener('click', (e) => {
+      e.stopPropagation();
+      const muted = toggleVoice();
+      setStatus(muted ? 'voice muted' : 'voice on');
+    });
+  });
+  function toggleVoice(forceState) {
+    const nowOn = forceState !== undefined ? forceState : !voiceSwitch.classList.contains('on');
+    voiceSwitch.classList.toggle('on', nowOn);
+    voiceSub.textContent = nowOn ? 'TTS is on' : 'TTS is muted';
+    ['audioTop', 'audioRight'].forEach(id => document.getElementById(id).classList.toggle('on', !nowOn));
+    return !nowOn;
+  }
+
+  /* ---------- folder overlay ---------- */
+  const folderOverlay = document.getElementById('folderOverlay');
+  const folderList = document.getElementById('folderList');
+  const FOLDERS = [
+    { name: 'Documents', path: '~/Documents' },
+    { name: 'Projects', path: '~/Projects' },
+    { name: 'Downloads', path: '~/Downloads' },
+    { name: 'Desktop', path: '~/Desktop' },
+  ];
+  let chosenFolder = null;
+  FOLDERS.forEach(f => {
+    const el = document.createElement('div');
+    el.className = 'folder-item';
+    el.innerHTML = `<svg viewBox="0 0 24 24"><path d="M3 9.5V7a2 2 0 0 1 2-2h3.5l1.5 2H19a2 2 0 0 1 2 2v1"/><path d="M3 9.5h18l-1.6 8a2 2 0 0 1-2 1.7H6.6a2 2 0 0 1-2-1.7L3 9.5Z"/></svg><span>${f.name} <span style="opacity:.55">${f.path}</span></span>`;
+    el.addEventListener('click', () => {
+      folderList.querySelectorAll('.folder-item').forEach(x => x.classList.remove('chosen'));
+      el.classList.add('chosen');
+      chosenFolder = f;
+    });
+    folderList.appendChild(el);
+  });
+  document.getElementById('grantFolderBtn').addEventListener('click', () => {
+    if (!chosenFolder) return;
+    setStatus('folder access: ' + chosenFolder.name);
+    closeAllOverlays();
+  });
+  ['folderTop', 'folderRight'].forEach(id => document.getElementById(id).addEventListener('click', (e) => {
+    e.stopPropagation(); openOverlay(folderOverlay, ['folderTop', 'folderRight']);
+  }));
+  document.getElementById('closeFolder').addEventListener('click', () => closeAllOverlays());
+
+  /* ---------- history overlay ---------- */
+  const historyOverlay = document.getElementById('historyOverlay');
+  const historyList = document.getElementById('historyList');
+  const HISTORY = [
+    { label: 'Fixed missing colon (line 42)', time: '2 min ago', color: '#4a9eff', icon: '<path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/>' },
+    { label: 'Explained recursive function', time: '18 min ago', color: '#a259ff', icon: '<path d="M4 17l6-6-6-6M12 19h8"/>' },
+    { label: 'Read text from screenshot', time: '41 min ago', color: '#ff9f4a', icon: '<path d="M4 8V5.5A1.5 1.5 0 0 1 5.5 4H8"/><path d="M16 4h2.5A1.5 1.5 0 0 1 20 5.5V8"/><path d="M20 16v2.5a1.5 1.5 0 0 1-1.5 1.5H16"/><path d="M8 20H5.5A1.5 1.5 0 0 1 4 18.5V16"/><circle cx="12" cy="12" r="3"/>' },
+    { label: 'Granted access to Projects', time: '1 hr ago', color: '#4acf7c', icon: '<path d="M3 9.5V7a2 2 0 0 1 2-2h3.5l1.5 2H19a2 2 0 0 1 2 2v1"/><path d="M3 9.5h18l-1.6 8a2 2 0 0 1-2 1.7H6.6a2 2 0 0 1-2-1.7L3 9.5Z"/>' },
+    { label: 'Voice reply muted', time: '2 hr ago', color: '#ff6b6b', icon: '<path d="M4.5 9.5v5h3.2L12 18V6L7.7 9.5H4.5Z"/><path d="M15 9.5l4.5 5M19.5 9.5 15 14.5"/>' },
+    { label: 'Switched model to deepseek-coder', time: 'Yesterday', color: '#4a9eff', icon: '<circle cx="12" cy="12" r="8"/><path d="M9 12l2 2 4-4"/>' },
+  ];
+  HISTORY.forEach((h, idx) => {
+    const el = document.createElement('div');
+    el.className = 'history-item' + (idx === 0 ? ' selected' : '');
+    el.innerHTML = `<div class="history-badge" style="background:${h.color}"><svg viewBox="0 0 24 24">${h.icon}</svg></div>
+      <div><div class="history-label">${h.label}</div><div class="history-time">${h.time}</div></div>`;
+    el.addEventListener('click', () => {
+      historyList.querySelectorAll('.history-item').forEach(x => x.classList.remove('selected'));
+      el.classList.add('selected');
+    });
+    historyList.appendChild(el);
+  });
+  ['historyTop', 'historyRight'].forEach(id => document.getElementById(id).addEventListener('click', (e) => {
+    e.stopPropagation(); openOverlay(historyOverlay, ['historyTop', 'historyRight']);
+  }));
+  document.getElementById('closeHistory').addEventListener('click', () => closeAllOverlays());
+
+  /* ---------- settings overlay ---------- */
+  const settingsOverlay = document.getElementById('settingsOverlay');
+  const themeToggle = document.getElementById('themeToggle');
+  const edgeToggle = document.getElementById('edgeToggle');
+  const revealToggle = document.getElementById('revealToggle');
+  const voiceSwitch = document.getElementById('voiceSwitch');
+  const voiceSub = document.getElementById('voiceSub');
+  const volumeSlider = document.getElementById('volumeSlider');
+  const shortcutChip = document.getElementById('shortcutChip');
+  const changeShortcutBtn = document.getElementById('changeShortcutBtn');
+  const shortcutSub = document.getElementById('shortcutSub');
+
+  ['settingsTop', 'settingsRight'].forEach(id => document.getElementById(id).addEventListener('click', (e) => {
+    e.stopPropagation(); openOverlay(settingsOverlay, ['settingsTop', 'settingsRight']);
+  }));
+  document.getElementById('closeSettings').addEventListener('click', () => closeAllOverlays());
+
+  themeToggle.addEventListener('click', (e) => {
+    const btn = e.target.closest('button'); if (!btn) return;
+    themeToggle.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    monitor.setAttribute('data-theme', btn.dataset.mode);
+  });
+
+  edgeToggle.addEventListener('click', (e) => {
+    const btn = e.target.closest('button'); if (!btn) return;
+    edgeToggle.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    applyEdge(btn.dataset.edge);
+    setStatus('reveal edge: ' + btn.dataset.edge);
+  });
+
+  revealToggle.addEventListener('click', (e) => {
+    const btn = e.target.closest('button'); if (!btn) return;
+    revealToggle.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    revealMode = btn.dataset.reveal;
+    setStatus('reveal on: ' + revealMode);
+  });
+
+  voiceSwitch.addEventListener('click', () => toggleVoice(!voiceSwitch.classList.contains('on')));
+  volumeSlider.addEventListener('input', () => setStatus('volume ' + volumeSlider.value + '%'));
+
+  /* shortcut recorder */
+  let recording = false;
+  changeShortcutBtn.addEventListener('click', () => {
+    recording = true;
+    shortcutChip.textContent = 'Press keys\u2026';
+    shortcutChip.classList.add('recording');
+    shortcutSub.textContent = 'Recording \u2014 press a key combo';
+  });
+  window.addEventListener('keydown', (e) => {
+    if (!recording) return;
+    if (['Control','Shift','Alt','Meta'].includes(e.key)) return;
+    e.preventDefault();
+    const parts = [];
+    if (e.ctrlKey) parts.push('Ctrl');
+    if (e.shiftKey) parts.push('Shift');
+    if (e.altKey) parts.push('Alt');
+    if (e.metaKey) parts.push('Cmd');
+    parts.push(e.key.length === 1 ? e.key.toUpperCase() : e.key);
+    shortcutChip.textContent = parts.join('+');
+    shortcutChip.classList.remove('recording');
+    shortcutSub.textContent = 'Opens the bar from anywhere';
+    recording = false;
+    setStatus('shortcut set: ' + parts.join('+'));
+  });
+
+  /* ---------- models ---------- */
+  const modelList = document.getElementById('modelList');
+  const MODELS = [
+    { id: 'phi', name: 'phi:2.7b', tag: 'Quick triage \u00b7 downloaded', downloaded: true, active: true },
+    { id: 'deepseek', name: 'deepseek-coder:6.7b', tag: 'Full explanations \u00b7 downloaded', downloaded: true, active: false },
+    { id: 'qwen', name: 'qwen2.5-coder:7b', tag: '4.7 GB \u00b7 not downloaded', downloaded: false, active: false },
+    { id: 'llama', name: 'llama3.2:3b', tag: '2.0 GB \u00b7 not downloaded', downloaded: false, active: false },
+  ];
+  function renderModels() {
+    modelList.innerHTML = '';
+    MODELS.forEach(m => {
+      const el = document.createElement('div');
+      el.className = 'model-card' + (m.active ? ' active' : '') + (!m.downloaded ? ' locked' : '');
+      const rightHTML = m.downloaded
+        ? (m.active ? '<span class="badge-active">Active</span>' : '<span class="badge-ready">Ready</span>')
+        : `<button class="dl-btn" data-id="${m.id}">Download</button>`;
+      el.innerHTML = `<div class="model-dot"></div>
+        <div class="model-info"><div class="model-name">${m.name}</div><div class="model-tag">${m.tag}</div></div>
+        <div class="model-action">${rightHTML}</div>`;
+      if (m.downloaded) {
+        el.addEventListener('click', () => {
+          MODELS.forEach(x => x.active = false);
+          m.active = true;
+          setStatus('model set to ' + m.name);
+          renderModels();
+        });
+      }
+      modelList.appendChild(el);
+    });
+    modelList.querySelectorAll('.dl-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const id = btn.dataset.id;
+        const model = MODELS.find(x => x.id === id);
+        const card = btn.closest('.model-card');
+        const action = card.querySelector('.model-action');
+        action.innerHTML = '<div class="dl-progress"><div class="dl-progress-fill" id="fill-' + id + '"></div></div>';
+        setStatus('downloading ' + model.name + '\u2026');
+        let pct = 0;
+        const fill = document.getElementById('fill-' + id);
+        const timer = setInterval(() => {
+          pct += 8 + Math.random() * 10;
+          if (pct >= 100) {
+            pct = 100;
+            clearInterval(timer);
+            model.downloaded = true;
+            setStatus(model.name + ' downloaded');
+            setTimeout(renderModels, 250);
+          }
+          if (fill) fill.style.width = pct + '%';
+        }, 140);
+      });
+    });
+  }
+  renderModels();
+
+  /* ---------- overlay open/close ---------- */
+  function openOverlay(el, triggerIds) {
+    closeAllOverlays();
+    collapseAll();
+    el.classList.add('visible');
+    (triggerIds || []).forEach(id => document.getElementById(id).classList.add('active'));
+  }
+  function closeAllOverlays() {
+    [historyOverlay, folderOverlay, settingsOverlay].forEach(o => o.classList.remove('visible'));
+    ['folderTop','folderRight','historyTop','historyRight','settingsTop','settingsRight'].forEach(id => document.getElementById(id).classList.remove('active'));
+  }
+  [historyOverlay, folderOverlay, settingsOverlay].forEach(o => {
+    o.addEventListener('click', (e) => { if (e.target === o) closeAllOverlays(); });
+  });
+</script>
+
+</body>
+</html>

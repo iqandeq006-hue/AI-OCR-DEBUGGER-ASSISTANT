@@ -19,8 +19,8 @@ DEVICE_CONFIG_FILE = os.path.join(BASE_DIR, "temp", "tts_device_choice.json")
 PID_FILE = os.path.join(BASE_DIR, "temp", "tts.pid")
 
 # 🔥 PIPER PATHS
-PIPER_PATH = r"C:\Users\iqand\Downloads\ladylisa\piper\piper.exe"
-VOICE_MODEL = r"C:\Users\iqand\Downloads\ladylisa\piper\voices\en_US-lessac-medium.onnx"
+PIPER_PATH = os.path.join(BASE_DIR, "piper", "piper.exe")
+VOICE_MODEL = os.path.join(BASE_DIR, "piper", "voices", "en_US-lessac-medium.onnx")
 
 os.makedirs(AUDIO_DIR, exist_ok=True)
 

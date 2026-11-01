@@ -298,6 +298,8 @@ class Orchestrator:
                     await self.announce("Capture cancelled. Press shortcut again.")
                     continue
 
+                send("capture-anim", True)
+
                 # OCR (FIXED EXEC)
                 await self.announce("Processing capture and running OCR.")
                 ocr_start = time.time()

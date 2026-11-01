@@ -3,3 +3,9 @@ node_modules/
 dist/
 build/
 *.onnx
+code/
+docs/
+temp/capture_*.png
+temp/tts_status.txt
+temp/tts.pid
+*.log

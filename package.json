@@ -1,6 +1,7 @@
 {
-  "name": "ai-debugger",
+  "name": "ai-debugging-assistant",
   "version": "1.0.0",
+  "description": "Overlay-Based AI Debugging Assistant using OCR and Local LLMs (Best Paper Award, ICASET 2026)",
   "main": "main.js",
   "scripts": {
     "start": "electron ."
