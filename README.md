@@ -86,7 +86,7 @@ This project and research paper were conceived, developed, and evaluated collabo
 | **Dharshin R** | **Team Lead & Principal System Architect** | Overall project conception and leadership; designed end-to-end system architecture; integrated local LLM inference engines (Ollama, DeepSeek Coder, Phi-2); authored manuscript and delivered conference presentation defense. |
 | **D. Haritha** | **Frontend & UI/UX Development** | Designed and engineered the persistent, transparent PyQt6 desktop overlay HUD; implemented screen-capture region selection, visual hierarchy, and interaction ergonomics. |
 | **Keerthana Mohan** | **Backend & Engine Design** | Architected the core backend processing pipeline; implemented OpenCV image preprocessing routines (binarization, thresholding) and Tesseract OCR integration. |
-| **Afreen Yusof** | **QA, Testing & Empirical Benchmarking** | Formulated the empirical evaluation methodology across 75 real-world Python error test cases; gathered benchmark telemetry (accuracy, latency, resolution rates); performed validation audits. |
+| **Afreen Yusaf** | **QA, Testing & Empirical Benchmarking** | Formulated empirical evaluation methodology across 75 real-world Python error cases; gathered benchmark telemetry (accuracy, latency, resolution rates); performed validation audits. |
 | **Dr. Reshmi B** | **Faculty Advisor & Research Mentor** | Academic guidance, research methodology oversight, paper peer-review structuring, and institutional support. |
 
 ---
@@ -134,7 +134,7 @@ This paper was presented and won the **Best Paper Award** at **ICASET 2026**:
 ```bibtex
 @inproceedings{haritha2026aidebugger,
   title={AI Debugging Assistant Using OCR and Local LLMs},
-  author={Haritha, D. and Dharshin, R. and Reshmi, B. and Yusof, Afreen and Mohan, Keerthana},
+  author={Haritha, D. and Dharshin, R. and Reshmi, B. and Yusaf, Afreen and Mohan, Keerthana},
   booktitle={Proceedings of the International Conference on Advancements in Science, Engineering & Technology (ICASET 2026)},
   series={Computer Science Track},
   organization={Ahalia School of Engineering and Technology, Palakkad},
