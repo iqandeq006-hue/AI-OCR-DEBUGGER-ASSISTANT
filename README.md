@@ -134,7 +134,7 @@ This paper was presented and won the **Best Paper Award** at **ICASET 2026**:
 ```bibtex
 @inproceedings{dharshin2026aidebugger,
   title={AI Debugging Assistant Using OCR and Local LLMs},
-  author={Dharshin, R. and Haritha, D. and Mohan, Keerthana and Yusaf, Afreen and Reshmi, B.},
+  author={Dharshin R and D. Haritha and Keerthana Mohan and Afreen Yusaf and Reshmi B},
   booktitle={Proceedings of the International Conference on Advancements in Science, Engineering & Technology (ICASET 2026)},
   series={Computer Science Track},
   organization={Ahalia School of Engineering and Technology, Palakkad},
