@@ -132,9 +132,9 @@ python main.py
 This paper was presented and won the **Best Paper Award** at **ICASET 2026**:
 
 ```bibtex
-@inproceedings{haritha2026aidebugger,
+@inproceedings{dharshin2026aidebugger,
   title={AI Debugging Assistant Using OCR and Local LLMs},
-  author={Haritha, D. and Dharshin, R. and Reshmi, B. and Yusaf, Afreen and Mohan, Keerthana},
+  author={Dharshin, R. and Haritha, D. and Mohan, Keerthana and Yusaf, Afreen and Reshmi, B.},
   booktitle={Proceedings of the International Conference on Advancements in Science, Engineering & Technology (ICASET 2026)},
   series={Computer Science Track},
   organization={Ahalia School of Engineering and Technology, Palakkad},
